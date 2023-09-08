@@ -6,14 +6,17 @@ import matplotlib as mpl
 import plotly as plt
 import argparse as ap
 import sys
+import random
 from os import getcwd
 
-from requests.models import REDIRECT_STATI
 
 # NOTE: this is serving as a preamble of init classes / importing parameters
 
 SCREENSIZE = (800, 800)
 PWD = getcwd()
+MAX_FIDELITY:float = 0
+MIN_FIDELITY:float = 0
+MAX_SATURATION:int = 0
 
 # common colors
 WHITE   = (255,255,255)
@@ -34,29 +37,91 @@ parser.add_argument("--time-step", type=float, help="Time resolution of our mode
 
 args = parser.parse_args()
 
+def roll(probabilities:tuple):
+    other_prob = (float(1-sum(probabilities)),)
+    # Check law of total probability
+    if other_prob[0] < 0:
+        raise Exception("Violation of the Law of Total Probability: sum of all probabilities must be equal to 1")
+    
+    all_prob:tuple = other_prob+probabilities
+    outcome = np.random.choice(len(probabilities)+1,1,p=all_prob)
+    if outcome == len(probabilities)+1:
+        # NOTE: "other" case is always 0
+        outcome = 0
+
+    return outcome
+
+
+def roll_fid(p1:float)->bool:
+    # Where p1 is the positive, non-zero probability that the event happens 
+    
+    # Calculate the upper bound based on the number of bits
+    upper_bound = 2 ** 8 # where 8 is the number of bits
+    
+    # Generate a random number within the specified upper bound
+    randomroll = np.random.random()*100 
+    
+    # NOTE: if the random number is equal to or below the threshold, 
+    # then the event happened
+
+    if randomroll <= 100*p1:
+        return True
+    else:
+        return False
+
+def saturation_to_fidelity( sat:int )->float:
+    # NOTE: this method maps the saturation value to fidelity
+    
+    # Calculate the percentage of input value within the input range
+    input_percentage = sat / MAX_SATURATION
+    
+    # Map the input percentage to the output range
+    mapped_value = MIN_FIDELITY + (input_percentage * (MAX_FIDELITY - MIN_FIDELITY))
+    
+    return mapped_value
+
+def forking(sprite,):
+    # check for pheromones directly adjacent to the agent, 
+    
+    if True:
+        outcome = roll_fid(saturation_to_fidelity(sprite.strength))
+        
+    # One branch: just check for fidelity, 
+
+    # Two Branches: weight probability by pheromone strength 
+    
+
+    # Three Branches: weight probability by pheromone strength 
+    
+    
+    pass
+
 class TurningKernel():
     # making a class for turning kernels to act as a template we can alter later
     # TODO:look at a continously defined turning kernel
-    def __init__(self, one:float = 0.25 , two:float = 0.25 , three:float = 0.25 , four:float = 0.25 )->None:
-        self.left = one
-        self.forward = two
-        self.right = three
-        self.backward = four
+    def __init__(self, one:float = 0.2, two:float = 0.2, three:float = 0.2, four:float = 0.2, five:float = .2 )->None:
+        # NOTE: make sure to know this is semetrical about the vertical axis
+        self.forward = one
+        self.diagonal_forward = two
+        self.side = three
+        self.diagonal_backward = four
+        self.backward = five
 
     def get_tk(self,):
         #TODO: need to figure out if this will randomly select a direction here, or pass the values,
         # if latter then this should not be a class
-        # FIX: add code here
+        #FIX: add code here
         pass
 
-class pheromone(pg.sprite.Sprite):
-    def __init__(self, position:tuple[int,int], initVal:float):
+class Pheromone(pg.sprite.Sprite):
+    def __init__(self, position:tuple[int,int], initVal:int):
         super().__init__()
         # Load the image for the agent
         # TODO: standardize image that comes in / size it
         height = 1
         width = 1
-        
+        self.strength = initVal
+        self.strength_to_opacity = 256//self.strength
         self.image = pg.Surface([width, height])
         self.image.fill(RED)
         self.image.set_colorkey(RED)
@@ -64,45 +129,73 @@ class pheromone(pg.sprite.Sprite):
         # Set the initial position of the agent
         self.rect.topleft = position
 
-    def update(self,decrement=False)->None:
+    def update(self,)->None:
+        #NOTE: this is currently assuming a linear decrease in pheromone
+
         # Boolean to determine if we're decrementing the pheromone trail or if 
         # were reseting it
+        n_strength = self.strength - 1
+        if n_strength <=0:
+            self.kill()
+        else:
+            self.strength = n_strength
+            self.image.set_alpha(self.strength_to_opacity*self.strength)
 
 
-class Agent():
     # TODO: combine this into one class
-    class _Sprite(pg.sprite.Sprite):    
-        def __init__(self, image, initial_position:tuple[int,int]=(0, 0)):
-            super().__init__()
-            # Load the image for the agent
-            # TODO: standardize image that comes in / size it
-            self.image = pg.image.load(image)  
-            self.rect = self.image.get_rect()
-            # Set the initial position of the agent
-            self.rect.topleft = initial_position  
-
-        def update_position(self, new_position:tuple[int,int]):
-            # HACK: this may not be the best way to do this
-            self.rect.topleft = new_position  
-
-    def __init__(self, tk:TurningKernel=TurningKernel(),# this is equivelant to a flat kernel 
-                 pos:tuple[int,int] = (SCREENSIZE[0]//2,SCREENSIZE[1]//2)):
-        # init parameters 
+class Agent(pg.sprite.Sprite):    
+    def __init__(self, 
+                 pos:tuple[int,int] = (SCREENSIZE[0]//2,SCREENSIZE[1]//2),
+                 tk:TurningKernel = TurningKernel()):
+        super().__init__()
+        self.trail: bool = False
         self.saturation = 0
-        self.pos = pos
-        # PATH TO DEFAULT ANT SPRITE
-        self.img = pg.image.load(PWD + "/imgs/ant.png")
-        self.sprite = self._Sprite(image=self.img, initial_position = pos)
+        # Load the image for the agent
+        # TODO: standardize image that comes in / size it
+        self.image = pg.image.load(PWD + "/imgs/ant.png")
+        self.rect = self.image.get_rect()
+        # Set the initial position of the agent
+        self.rect.move(pos)
+        self.hitbox = self.rect.copy().inflate(2.0,2.0)
+        
+    def update(self, ):
+        
+        current_pos = self.rect.center
+        # TODO: CHECK FOR ILLEGAL ANT POSITION 
+        if not pg.screen.contains(self.rect): 
+            self.kill()
+        
+        # TODO: Check if on trail or off trail
+        if self.trail:
+            # If so, then we decide if we want to follow the trail or not
+            self.saturation += 1
+            outcome = roll((saturation_to_fidelity(self.saturation),))
+            
+        # TODO: Check for adjacent pheromone on all 8 spaces 
+        # then pipe that information into a fork algorithm 
 
-    def move(self,dxpos,dypos):
-        self.pos = (self.pos[0]+dxpos, self.pos[1]+dypos)
-        self.sprite.update_position(self.pos) 
+        # TODO: UPDATE SATURATION BASED (CHECK TO SEE IF THIS HAS ALREADY BEEN IMPLEMENTED)
+        
+        # TODO: EVALUATE TurningKernel
+
+
+
+        
+        # TODO: UPDATE POSITION
+
+        #new_position:tuple[int,int]
+        self.rect.move_ip(new_position)
+        self.hitbox.move_ip(new_position)
+
+#def move(self,dxpos,dypos):
+#    self.pos = (self.pos[0]+dxpos, self.pos[1]+dypos)
+#    self.sprite.update_position(self.pos) 
 
 if __name__ == "__main__":
     # main program loop
 
     pg.init()
-    board = pg.display.set_caption("simulation") 
+    window = pg.display.set_caption("simulation") 
     screen = pg.display.set_mode(SCREENSIZE)
     clock  = pg.time.Clock()
 
@@ -130,8 +223,8 @@ if __name__ == "__main__":
     else:
         epoch = np.arange(start=0.0, stop=1500, step=1.0)
 
+    # NOTE: this will serve as our update loop. 
     for ctime in epoch:
-        # NOTE: this will serve as our update loop. 
         # Every cycle of our model is updated from within this loop
         
         # check the length of agents in our list, if less then max try to add one
@@ -141,15 +234,16 @@ if __name__ == "__main__":
             agent_sprites.add(new_agent.sprite)
         
         # check for ants outside of the display, remove if true
-        for i in agent_sprites:
-            if not pg.contains(i):
-                pg.kill(i)
-                
+        # TODO: Move this into the agent sprite
+        for a_s in agent_sprites:
+            if not screen.get_rect().contains(a_s):
+                pg.kill(a_s) 
+
+        # NOTE: remove pheromone trails below a given strength
+        pheromone_trails.update()
+            # leave a pheromone behind/at the current location, if already pheromone there, 
+            # update its strength
         
-        # TODO: Find a way to remove the agents from the all agent list 
-        
-        # leave a pheromone behind/ at the current location, if already pheromone there, 
-        # update its strength
         
         # update the positions of each agent
         
