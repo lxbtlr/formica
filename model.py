@@ -254,13 +254,32 @@ class Sim_Window():
         name = f"{'-'.join(time.ctime().split()[1:4])}-{agents}-{max_time}-{tao}.jpg"
         pygame.image.save(self.screen, f"img/{name}") 
 
+def split_list(long_list:list, chunk_size:int)->list[list]:
+    if not (len(long_list) >6):
+        return [long_list]
+    return [long_list[i:i + chunk_size] for i in range(0, len(long_list), chunk_size)]
+
+def process_section(section_agents):
+    for ant in section_agents:
+        
+        _x,_y = ant.get_position()
+        if _x < 1 or _x>len(board)-2 or _y <1 or _y > len(board)-2:
+            ant.reset()
+            _x,_y = ant.get_position()
+        xtmp.append(_x) 
+        ytmp.append(_y)
+        nboard[_x][_y] = 1
+        ant.update(pheromone_concentration)
+
+    return (section_agents, xtmp, ytmp)
+
+
 
 if __name__ == "__main__":
     # main program loop
     sim = Sim_Window(wSize=np.multiply(board.shape,4),
                      gridSize=len(board))
 
-    # TODO: Add wide turning kernel from paper
     wide_tk = TurningKernel(
             values=[[.18,.18,.18],
                     [.18,0,.18],
@@ -270,7 +289,16 @@ if __name__ == "__main__":
                     [.1,0,.1],
                     [.0,0,.0]])
     flat_tk = TurningKernel()
+   
+    #NOTE: Setting up multiprocessing
     
+    processes = 6
+    chunk_size = len(agents)//processes
+
+
+    #############
+
+
     # all_agents = np.array([Agent(tk=narrow_tk) for i in range(agents) ])
     all_agents = []
     #all pheromones exist on their own board
@@ -283,7 +311,7 @@ if __name__ == "__main__":
         # Every cycle of our model is updated from within this loop
         if len(all_agents) < agents:
             all_agents.append(Agent(tk=narrow_tk))
-
+        list_chunks = list(split_list())
         # update all ants
         xtmp = [] 
         ytmp = []
@@ -295,9 +323,8 @@ if __name__ == "__main__":
                 _x,_y = ant.get_position()
             xtmp.append(_x) 
             ytmp.append(_y)
+            nboard[_x][_y] = 1
             ant.update(pheromone_concentration)
-            nx, ny = ant.get_position()
-            nboard[nx][ny] = 1
         #print(f"xtmp:{xtmp}\nytmp:{ytmp}") 
         #NOTE: update pheromone trails
         for _x,_y in zip(xtmp, ytmp):
