@@ -11,8 +11,6 @@ parser = ap.ArgumentParser(description="A script to generate an agent based mode
 
 parser.add_argument("--agents", type=int, help="Max number of concurrent agents in the model")
 parser.add_argument("--kernel", type=str, help="Selected turning kernel")
-parser.add_argument("--fidelity", type=int, help="Select which fidelity case to model") 
-#TODO: this^ may need to be a boolean
 parser.add_argument("--max-time", type=int, help="Max simulation time our model will run")
 parser.add_argument("--time-step", type=float, help="Time resolution of our model")
 parser.add_argument("--tao", type=int, help="Max trail length")
@@ -48,13 +46,11 @@ DIRECTIONS= [[315, 0, 45],[270, -1, 90],[225, 180,135]]
 
 class TurningKernel():
     # making a class for turning kernels to act as a template we can alter later
-    # TODO:look at a continously defined turning kernel
     def __init__(self, values:list[list[float]]=[[.1,.3,.1],[.1,0,.1],[.1,.1,.1]])->None:
         # loading weights
         self.turningKernel = np.array(values)
         
     def calc(self,direction:int):
-        #TODO: apply rotation on matrix
         num90s = direction//90
         tmp = np.rot90(self.turningKernel.copy(),k=num90s)
         if (direction - 90*num90s) //45:
@@ -87,15 +83,11 @@ class Agent():
         
         # using current position, check what is next it, 
         mat = self.get_adj(pc)
-        #NOTE: moving to explicit cases
         
         if mat.shape == (2,3) or mat.shape == (3,2):
             if DEBUG: print(f"old mat:\n{mat}")
             mat = np.resize(mat, [3,3])
-        #if not mat.shape == (3,3):  
-        #    pad_width = ((0, max(0, 3 - mat.shape[0])),
-        #         (0, max(0, 3- mat.shape[1])))
-        #    np.pad(mat, pad_width=pad_width, mode="constant")
+       
         if DEBUG: print(f"matrix:\n{mat}")
         # case where there is no pheromone adj
         if not np.sum(mat) > 0:
@@ -119,7 +111,6 @@ class Agent():
 
         fidelity = saturation_to_fidelity(self.saturation)
 
-        #NOTE:find out if we stay on trail or not        
         if flip(fidelity / MAX_FIDELITY):
             # Apply weight of pheromone concentrations onto turning kernel 
             weighted_matrix = mat * self.tk.calc(self.direction)
@@ -191,6 +182,11 @@ def roll(nmatrix)->int:
     flat = nmatrix.ravel()
     flat = np.nan_to_num(flat)
     if flat.sum() == 0: flat[1] = 1
+    # branches = np.count_nonzero(flat==np.max(flat))
+    # if branches>1:
+    #     print(branches)
+    #     outcome = 1
+    # else:
     outcome = int(np.random.choice(range(0,9),1,p=flat))
     return outcome
 
@@ -265,11 +261,13 @@ if __name__ == "__main__":
                      gridSize=len(board))
 
     # TODO: Add wide turning kernel from paper
-    wide_tk = TurningKernel()
-
+    wide_tk = TurningKernel(
+            values=[[.18,.18,.18],
+                    [.18,0,.18],
+                    [.05,0,.05]])
     narrow_tk = TurningKernel(
-            values=[[.20,.3,.20],
-                    [.15,0,.15],
+            values=[[.25,.3,.25],
+                    [.1,0,.1],
                     [.0,0,.0]])
     flat_tk = TurningKernel()
     
