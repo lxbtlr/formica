@@ -13,23 +13,27 @@ parser.add_argument("--fidelity", type=int, help="Select which fidelity case to 
 #TODO: this^ may need to be a boolean
 parser.add_argument("--max-time", type=int, help="Max simulation time our model will run")
 parser.add_argument("--time-step", type=float, help="Time resolution of our model")
-
+parser.add_argument("--tao", type=int, help="Max trail length")
 args = parser.parse_args()
 
 
 # NOTE: this is serving as a preamble of init classes / importing parameters
 
+DEBUG = False
 PWD = getcwd()
 MAX_FIDELITY:float = 100
 MIN_FIDELITY:float = 0
 MAX_SATURATION:int = 20
-tao = 20
+if args.tao: 
+    tao = args.tao
+else:
+    tao = 10
 
 board = np.zeros((255,255))
 
 
 DIRECTIONS= [[315, 0, 45],[270, -1, 90],[225, 180,135]]
-
+#DIRECTIONS= [[45, 0, 315],[90, -1, 270],[135, 180,225]]
 
 class TurningKernel():
     # making a class for turning kernels to act as a template we can alter later
@@ -42,46 +46,57 @@ class TurningKernel():
         #TODO: apply rotation on matrix
         num90s = direction//90
         tmp = np.rot90(self.turningKernel.copy(),k=num90s)
-        if direction - num90s //45:
+        if (direction - 90*num90s) //45:
             tmp = rot45(tmp)
         return tmp
 
 class Agent():
-    def __init__(self,):
+    def __init__(self,
+                 tk:TurningKernel = TurningKernel()):
         self.saturation = 0
         self.x = 127
         self.y = 127
         self.direction:int =  int(np.random.random()*8)*45# in degrees
+        if DEBUG: print(self.direction)
         self.ontrail = False
-        self.tk= TurningKernel()
+        self.tk= tk
 
     def get_position(self):
         return (self.x, self.y)
 
     def explore(self):
         matrix = self.tk.calc(direction=self.direction)
+        if DEBUG: print(f"Exploring ({self.direction}):\n{matrix}")
         outcome = roll(matrix)
-        self.x += outcome//3 +1
-        self.y += outcome%3 - 1
+        self.x += outcome//3 -1
+        self.y -= outcome%3 - 1
         self.direction = DIRECTIONS[outcome%3][outcome//3]
-
+        if DEBUG: print(f"I'm going: {self.direction}")
     def update(self, pc):
         
         # using current position, check what is next it, 
         mat = self.get_adj(pc)
-        if not mat.shape == (3,3):
-            
-            pad_width = ((0, max(0, 3 - mat.shape[0])),
-                 (0, max(0, 3- mat.shape[1])))
-            np.pad(mat, pad_width=pad_width, mode="constant")
+        #NOTE: moving to explicit cases
+        
+        if mat.shape == (2,3) or mat.shape == (3,2):
+            if DEBUG: print(f"old mat: {mat}")
+            mat = np.resize(mat, [3,3])
+        #if not mat.shape == (3,3):  
+        #    pad_width = ((0, max(0, 3 - mat.shape[0])),
+        #         (0, max(0, 3- mat.shape[1])))
+        #    np.pad(mat, pad_width=pad_width, mode="constant")
+        if DEBUG: print(f"matrix:\n{mat}")
         # case where there is no pheromone adj
         if not np.sum(mat) > 0:
+            if DEBUG: print(f"np.sum(mat): {np.sum(mat)}")
             self.explore()
             return None
         
         if mat[1][1] > 0:
             self.ontrail = True
-            self.saturation +=1
+            if self.saturation < MAX_SATURATION: self.saturation +=1
+            else:
+                pass
         else:
             self.ontrail = False
             if self.saturation == 0:
@@ -93,16 +108,19 @@ class Agent():
 
         fidelity = saturation_to_fidelity(self.saturation)
 
-        # find out if we stay on trail or not        
+        #NOTE:find out if we stay on trail or not        
         if flip(fidelity / MAX_FIDELITY):
             # Apply weight of pheromone concentrations onto turning kernel 
             weighted_matrix = mat * self.tk.calc(self.direction)
+            if DEBUG: print(f"weighted_matrix:\n{weighted_matrix}")
             # Normalize Matrix
             normalized_matrix = weighted_matrix/weighted_matrix.sum()
+            if DEBUG: print(f"normalized_matrix:\n{normalized_matrix}")
             outcome = roll(normalized_matrix)
-            self.x += outcome//3 +1
-            self.y += outcome%3 - 1
+            self.x += outcome//3 -1
+            self.y -= outcome%3 - 1
             self.direction = DIRECTIONS[outcome%3][outcome//3]
+            if DEBUG: print(f"I'm going: {self.direction}")
         else:
             self.explore()
             return None
@@ -119,7 +137,7 @@ class Agent():
         self.ontrail = False
 
 
-def rot45(matrix, direction="right"):
+def rot45(matrix, direction="left"):
     if matrix.shape[0] != matrix.shape[1]:
         raise ValueError("Input matrix must be square (n x n)")
     n = matrix.shape[0]
@@ -150,7 +168,7 @@ def rot45(matrix, direction="right"):
 
 def flip(p_true:float)->bool:
     if p_true > 1 or p_true < 0:
-        raise ValueError("probability true must be in range [0,1]")
+        raise ValueError(f"probability true must be in range [0,1]\np={p_true}")
     return np.random.random()<p_true
 
 def roll(nmatrix)->int:
@@ -173,7 +191,7 @@ def saturation_to_fidelity( sat:int )->float:
     
     # Map the input percentage to the output range
     mapped_value = MIN_FIDELITY + (input_percentage * (MAX_FIDELITY - MIN_FIDELITY))
-    
+    if mapped_value > MAX_FIDELITY: mapped_value = MAX_FIDELITY
     return mapped_value
 
 
@@ -195,18 +213,25 @@ class Sim_Window():
         # Main loop
         self.running = True
 
-    def update(self, pheromone):
+    def update(self, pheromone, agents):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
      
         # Clear the screen
         self.screen.fill(self.BLACK)
-        
+     
         # Draw the grid of squares based on the data
         for row in range(self.GRID_SIZE):
             for col in range(self.GRID_SIZE):
+                if nboard[row][col]:
+                    pygame.draw.rect(self.screen, self.WHITE, (col * self.SQUARE_SIZE, row * self.SQUARE_SIZE, self.SQUARE_SIZE, self.SQUARE_SIZE))
+                    continue
+                
                 data_value = pheromone[row][col]
+                
+                if data_value >= 255:
+                    data_value = 255
                 color = (data_value, 0, 0, data_value)
                 pygame.draw.rect(self.screen, color, (col * self.SQUARE_SIZE, row * self.SQUARE_SIZE, self.SQUARE_SIZE, self.SQUARE_SIZE))
          
@@ -218,9 +243,6 @@ class Sim_Window():
         pygame.quit()
         sys.exit()
 
-all_agents = np.array([Agent() for i in range(args.agents) ])
-#all pheromones exist on their own board
-pheromone_concentration = board.copy()
 
 if __name__ == "__main__":
     # main program loop
@@ -230,45 +252,57 @@ if __name__ == "__main__":
     # TODO: Add wide turning kernel from paper
     wide_tk = TurningKernel()
 
-    # TODO: Add narrow turning kernel from paper
     narrow_tk = TurningKernel(
-            values=[[.20,.20,.20],
+            values=[[.20,.3,.20],
                     [.15,0,.15],
-                    [.05,0,.05]])
+                    [.0,0,.0]])
     flat_tk = TurningKernel()
     
+    # all_agents = np.array([Agent(tk=narrow_tk) for i in range(args.agents) ])
+    all_agents = []
+    #all pheromones exist on their own board
+    pheromone_concentration = board.copy()
+
     #TODO: add arg time into this statment
-    epoch = np.arange(start=0.0, stop=1500, step=1.0) 
+    if args.max_time:
+        epoch = np.arange(start=0.0, stop=args.max_time, step=1.0) 
+    else:
+        epoch = np.arange(start=0.0, stop=1500, step=1.0) 
 
     #NOTE: this will serve as our update loop. 
     for ctime in epoch:
         # Every cycle of our model is updated from within this loop
-        
+        if len(all_agents) < args.agents:
+            all_agents.append(Agent(tk=narrow_tk))
+
         # update all ants
         xtmp = [] 
         ytmp = []
+        nboard = board.copy()
         for ant in all_agents:
             _x,_y = ant.get_position()
-            if _x < 0 or _x>len(board)-1 or _y <0 or _y > len(board)-1:
+            if _x < 1 or _x>len(board)-2 or _y <1 or _y > len(board)-2:
                 ant.reset()
                 _x,_y = ant.get_position()
             xtmp.append(_x) 
             ytmp.append(_y)
             ant.update(pheromone_concentration)
+            nx, ny = ant.get_position()
+            nboard[nx][ny] = 1
         #print(f"xtmp:{xtmp}\nytmp:{ytmp}") 
         #NOTE: update pheromone trails
         for _x,_y in zip(xtmp, ytmp):
-            pheromone_concentration[_x][_y] = tao
+            
+            if pheromone_concentration[_x][_y] >= tao*3:
+                pheromone_concentration[_x][_y] = tao*3
+            else:
+                pheromone_concentration[_x][_y] += tao*3
+
         # pheromone_concentration[xtmp][ytmp] = tao
         #NOTE: decrement all pheromone trails
         pheromone_concentration  -= 1
         #NOTE: prevent any negative values
         pheromone_concentration = np.maximum(pheromone_concentration,0)
-        sim.update(np.multiply(pheromone_concentration, 255//tao))
-    
+        sim.update(np.multiply(pheromone_concentration, 255//tao), nboard)
+        print(f"time:\t\t{ctime}")    
     sim.close() 
-
-
-
-
-
