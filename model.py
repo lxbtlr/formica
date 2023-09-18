@@ -13,7 +13,7 @@ parser = ap.ArgumentParser(description="A script to generate an agent based mode
 parser.add_argument("--agents", default=100, type=int, help="Max number of concurrent agents in the model")
 parser.add_argument("--kernel", type=str, help="Selected turning kernel")
 parser.add_argument("--max-time", default=1000, type=int, help="Max simulation time our model will run")
-parser.add_argument("--multi", default=True, type=bool, help="Toggle Multiprocess (on by default)")
+parser.add_argument("--multi", default=0, type=int, help="Toggle Multiprocess (on by default)")
 parser.add_argument("--tao", default=10, type=int, help="Max trail length")
 args = parser.parse_args()
 
@@ -23,16 +23,20 @@ args = parser.parse_args()
 DEBUG = False
 PWD = getcwd()
 MAX_FIDELITY:float = 100
-MIN_FIDELITY:float = 80
-MAX_SATURATION:int = 20
-MAX_PHEROMONE_STRENGTH:int = 4
-MULTIPROCESS = True
+MIN_FIDELITY:float = 90
+MAX_SATURATION:int = 30
+MAX_PHEROMONE_STRENGTH:int = 6
 
+match args.multi:
+    case 0:
+        MULTIPROCESS = False
+    case _:
+        MULTIPROCESS = True
 
 tao = args.tao
 agents = args.agents
 max_time = args.max_time
-print(f"Starting model:\ntao: {tao}\nagents: {agents}\nmat time: {max_time}")
+print(f"Starting model:\ntao: {tao}\nagents: {agents}\nmat time: {max_time}\nmulti: {MULTIPROCESS}")
 
 
 board = np.zeros((255,255))
@@ -72,10 +76,51 @@ class Agent():
     def get_position(self):
         return (self.x, self.y)
 
+    def forking(self,nmatrix):
+        ''' 
+        This function interprets the forking algorithm that is explicitly 
+        defined in the original paper.
+        @param nmatrix 3x3 Numpy array representing the normalized strength of 
+        nearby pheromone. The graphic below illustrates this matrix 
+        0 , 1 , 2
+        3 ,>A<, 5
+        6 , 7 , 8 
+
+        @return position the forking algorithm has chosen to move into
+        where -1 means explore
+        '''
+        flattened = nmatrix.ravel()
+        flattened = np.nan_to_num(flattened)
+        tmp = flattened[:8] + np.array(flattened[9])
+        #NOTE: Case 0: if there is no trails sensed, explore
+        if tmp.sum() == 0:
+            return -1
+        
+        #NOTE: Case 1: if there is trail straight ahead, follow it
+        if flattened[1] > 0:
+            return 1
+        
+        #NOTE: Case 2: if there are two or more trails of ~ the same strength, explore
+        min_distance = .10
+        sorted_ind = np.argsort(flattened)
+        # Extract the three smallest values based on sorted indices
+        strongest_trails = flattened[sorted_ind[-3:]]
+        # Calculate absolute differences between the three smallest values
+        absolute_differences = np.diff(strongest_trails)
+        # Check if all absolute differences are within the minimum distance
+        are_within_distance = all(abs(diff) <= min_distance 
+                                  for diff in absolute_differences)
+        if are_within_distance:
+            return -1
+        
+        #NOTE: Case 3: if neither case above is true, take the stronger 
+        #              of the two options
+        return strongest_trails[2]
+
     def explore(self):
         matrix = self.tk.calc(direction=self.direction)
         if DEBUG: print(f"Exploring ({self.direction}):\n{matrix}")
-        outcome = roll(matrix, self.direction)
+        outcome = roll8(matrix, self.direction)
         self.x += outcome//3 -1
         self.y -= outcome%3 - 1
         self.direction = DIRECTIONS[outcome%3][outcome//3]
@@ -97,9 +142,6 @@ class Agent():
                 else:
                     pass
                 
-
-
-        pass
 
     def update(self, pc):
         # using current position, check what is next it, 
@@ -129,7 +171,7 @@ class Agent():
             # Normalize Matrix
             normalized_matrix = weighted_matrix/weighted_matrix.sum()
             if DEBUG: print(f"normalized_matrix:\n{normalized_matrix}")
-            outcome = roll(normalized_matrix, self.direction)
+            outcome = roll8(normalized_matrix, self.direction)
             self.x += outcome//3 -1
             self.y -= outcome%3 - 1
             self.direction = DIRECTIONS[outcome%3][outcome//3]
@@ -183,23 +225,22 @@ def flip(p_true:float)->bool:
         raise ValueError(f"probability true must be in range [0,1]\np={p_true}")
     return np.random.random()<p_true
 
-def roll(nmatrix, direction)->int:
+
+def roll8(nmatrix, direction)->int:
     ''' 
     0 , 1 , 2
-    3 , 4 , 5
+    3 ,>A<, 5
     6 , 7 , 8 
     '''
     flat = nmatrix.ravel()
     flat = np.nan_to_num(flat)
-    if flat[np.argpartition(flat,-2)[-2:]].sum() > .7:
+    if flat[np.argpartition(flat,-2)[-2:]].sum() > .9 and flat.sum() != 0:
         #branches = np.count_nonzero(flat==np.max(flat))
         #if branches>2:
         #print(branches)
         x,y  = deg2position(direction)
         outcome:int = int(x + y*3)
     else:
-        if flat.sum() == 0: 
-            flat[1] = 1 
         outcome:int = int(np.random.choice(range(0,9),1,p=flat))
     return outcome
 
@@ -313,14 +354,18 @@ if __name__ == "__main__":
             values=[[.18,.18,.18],
                     [.18,0,.18],
                     [.05,0,.05]])
+    #NOTE: (30,30,20,15,5)
     narrow_tk = TurningKernel(
             values=[[.25,.3,.25],
                     [.1,0,.1],
                     [.0,0,.0]])
-    flat_tk = TurningKernel()
+    # narrow_tk = TurningKernel(
+    #         values=[[.25,.3,.25],
+    #                 [.1,0,.1],
+    #                 [.0,0,.0]])
+    flat_tk = TurningKernel(values=[[1/8,1/8,1/8],[1/8,0,1/8],[1/8,1/8,1/8]])
    
     #NOTE: Setting up multiprocessing
-    
     processes = 6
 
     #############
@@ -350,6 +395,7 @@ if __name__ == "__main__":
         nboard = board.copy()
         # NOTE: if more than 6 ants start multiprocessing
         if len(all_agents)>6 and MULTIPROCESS:
+            print("MUTLIPROCESSING!")
             list_chunks = list(split_list(all_agents,processes))
             with multiprocessing.Pool(processes=processes) as pool:
             # Perform computations on each chunk in parallel
