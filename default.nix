@@ -18,10 +18,9 @@ in mkShell {
       ps.requests
       ps.plotly
       ps.pygame
-      ps.matplotlib
       ps.seaborn
+      ps.matplotlib
     ]))
+    imagemagick
   ];
-
-
 }
