@@ -20,7 +20,6 @@ parser.add_argument("--ssfreq", default=10, type=int, help="How frequently a ss 
 parser.add_argument("--imgsubdir", default="",type=str,help="Specify an image subdirectory for your img(s) to be saved (helps with making gifs)")
 args = parser.parse_args()
 
-
 # NOTE: this is serving as a preamble of init classes / importing parameters
 
 DEBUG = False
@@ -143,11 +142,11 @@ class Agent():
         
         #NOTE: Case 3: if neither case above is true, take the 
         # stronger of the options
-
+        
         top2 = flattened[sorted_ind[-2:]]
         ntop2 = top2 / top2.sum()
         choice = flip(ntop2[0])
-
+        
         #HACK: This is a great example of how to NOT use match case statments
         #print(f"NTOP2: {ntop2}\ntop2: {top2}\nchoice: {choice}")
         #match choice:
@@ -157,8 +156,8 @@ class Agent():
         #    case False:
         #        # print("path chosen",False, sorted_ind[1])
         #        return sorted_ind[-2]
-        #retun
-
+        #return
+        
         #NOTE: Using the sorted_ind array since we want the indicies, 
         # not the values
         if choice:

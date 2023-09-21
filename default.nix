@@ -21,7 +21,6 @@ in mkShell {
       ps.seaborn
       ps.matplotlib
     ]))
+    imagemagick
   ];
-
-
 }
