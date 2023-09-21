@@ -3,7 +3,7 @@ project by Alex Butler
 
 ## Install:
 
-To install, clone this repository and its dependencies.
+To install, clone this repository and install its dependencies.
 
 ```
 git clone https://github.com/olincollege/scicomp-p1-formica.git
@@ -13,11 +13,15 @@ git clone https://github.com/olincollege/scicomp-p1-formica.git
 There are a few dependencies for this project that need to be installed for the code to function. 
 - Python 3.10+
 - Python Libraries:
-    >numpy
-    >pandas
-    >pygame
+    ```
+    numpy
+    pandas
+    pygame
+    ```
 - (Optional) dependencies for other features:
-    >imagemagick
+    ```
+    imagemagick
+    ```
 
 ### Note 
 Installing them through your prefered method is fine -- I personally use nix :snowflake: to create a nix shell environment to load all dependencies easily from the default.nix file using the command:
