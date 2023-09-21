@@ -3,6 +3,7 @@ import multiprocessing
 import argparse as ap
 import sys
 import pygame
+import pygame.freetype
 from os import getcwd
 import time
 
@@ -15,17 +16,21 @@ parser.add_argument("--kernel", type=str, help="Selected turning kernel")
 parser.add_argument("--max-time", default=1000, type=int, help="Max simulation time our model will run")
 parser.add_argument("--multi", default=0, type=int, help="Toggle Multiprocess (on by default)")
 parser.add_argument("--tao", default=10, type=int, help="Max trail length")
+parser.add_argument("--ssfreq", default=10, type=int, help="How frequently a ss should be taken")
+parser.add_argument("--imgsubdir", default="",type=str,help="Specify an image subdirectory for your img(s) to be saved (helps with making gifs)")
 args = parser.parse_args()
 
 
 # NOTE: this is serving as a preamble of init classes / importing parameters
 
 DEBUG = False
+START_TIME = time.ctime().split()[1:4]
 PWD = getcwd()
 MAX_FIDELITY:float = 100
 MIN_FIDELITY:float = 90
 MAX_SATURATION:int = 30
 MAX_PHEROMONE_STRENGTH:int = 6
+ss_freq:int = 10
 
 match args.multi:
     case 0:
@@ -44,7 +49,6 @@ DIRECTIONS= np.array([[315, 0, 45],[270, -1, 90],[225, 180,135]])
 #DIRECTIONS= [[45, 0, 315],[90, -1, 270],[135, 180,225]]
 
 def deg2position(degrees):
-    # Convert degrees to radians using NumPy
     ind = np.where(DIRECTIONS == degrees)
     x,y = ind
     return x[0], y[0]
@@ -71,12 +75,23 @@ class Agent():
         self.direction:int =  int(np.random.random()*8)*45# in degrees
         if DEBUG: print(self.direction)
         self.ontrail = False
+        self.lost = True
         self.tk= tk
 
     def get_position(self):
         return (self.x, self.y)
 
-    def forking(self,nmatrix):
+    def explore(self):
+        matrix = self.tk.calc(direction=self.direction)
+        if DEBUG: print(f"Exploring ({self.direction}):\n{matrix}")
+        outcome = roll8(matrix, self.direction)
+        self.x += outcome//3 -1
+        self.y -= outcome%3 - 1
+        self.direction = DIRECTIONS[outcome%3][outcome//3]
+        if DEBUG: print(f"I'm going: {self.direction}")
+        self.lost = True
+
+    def forking(self,matrix)->int:
         ''' 
         This function interprets the forking algorithm that is explicitly 
         defined in the original paper.
@@ -89,19 +104,31 @@ class Agent():
         @return position the forking algorithm has chosen to move into
         where -1 means explore
         '''
-        flattened = nmatrix.ravel()
-        flattened = np.nan_to_num(flattened)
-        tmp = flattened[:8] + np.array(flattened[9])
+        
         #NOTE: Case 0: if there is no trails sensed, explore
-        if tmp.sum() == 0:
+        if np.sum(matrix) ==0:
             return -1
         
+
         #NOTE: Case 1: if there is trail straight ahead, follow it
-        if flattened[1] > 0:
-            return 1
+
+        x, y = deg2position(self.direction)
+        if matrix[x][y] > 0:
+            return (y*3)+x
         
         #NOTE: Case 2: if there are two or more trails of ~ the same strength, explore
+        
         min_distance = .10
+        
+        weighted_matrix = matrix * self.tk.calc(self.direction)
+        if DEBUG: print(f"weighted_matrix:\n{weighted_matrix}")
+        # Normalize Matrix
+        normalized_matrix = weighted_matrix/weighted_matrix.sum()
+        if DEBUG: print(f"normalized_matrix:\n{normalized_matrix}")
+
+        flattened = normalized_matrix.ravel()
+        flattened = np.nan_to_num(flattened)
+        
         sorted_ind = np.argsort(flattened)
         # Extract the three smallest values based on sorted indices
         strongest_trails = flattened[sorted_ind[-3:]]
@@ -110,21 +137,34 @@ class Agent():
         # Check if all absolute differences are within the minimum distance
         are_within_distance = all(abs(diff) <= min_distance 
                                   for diff in absolute_differences)
+        
         if are_within_distance:
             return -1
         
-        #NOTE: Case 3: if neither case above is true, take the stronger 
-        #              of the two options
-        return strongest_trails[2]
+        #NOTE: Case 3: if neither case above is true, take the 
+        # stronger of the options
 
-    def explore(self):
-        matrix = self.tk.calc(direction=self.direction)
-        if DEBUG: print(f"Exploring ({self.direction}):\n{matrix}")
-        outcome = roll8(matrix, self.direction)
-        self.x += outcome//3 -1
-        self.y -= outcome%3 - 1
-        self.direction = DIRECTIONS[outcome%3][outcome//3]
-        if DEBUG: print(f"I'm going: {self.direction}")
+        top2 = flattened[sorted_ind[-2:]]
+        ntop2 = top2 / top2.sum()
+        choice = flip(ntop2[0])
+
+        #HACK: This is a great example of how to NOT use match case statments
+        #print(f"NTOP2: {ntop2}\ntop2: {top2}\nchoice: {choice}")
+        #match choice:
+        #    case True:
+        #        # print("path chosen",True, sorted_ind[0])
+        #        return sorted_ind[-1]
+        #    case False:
+        #        # print("path chosen",False, sorted_ind[1])
+        #        return sorted_ind[-2]
+        #retun
+
+        #NOTE: Using the sorted_ind array since we want the indicies, 
+        # not the values
+        if choice:
+            return sorted_ind[-2]
+        else:
+            return sorted_ind[-1]
 
     def update_trail(self,update:bool|None=None):
         if not update is None:
@@ -145,40 +185,52 @@ class Agent():
 
     def update(self, pc):
         # using current position, check what is next it, 
-        # TODO: reorganize this pattern of logical checks
         mat = self.get_adj(pc)
         
+        # Check if matrix is the correct size, if not, we repair it
         if mat.shape == (2,3) or mat.shape == (3,2):
             if DEBUG: print(f"old mat:\n{mat}")
             mat = np.resize(mat, [3,3])
        
         if DEBUG: print(f"matrix:\n{mat}")
-        # case where there is no pheromone adj
         
         self.ontrail = mat[1][1]>0
         self.update_trail()
-
+       
         # staying at the same position is not an option
         mat[1][1] = 0
         fidelity = saturation_to_fidelity(self.saturation)
-        if not np.sum(mat)> 0:
-            if DEBUG: print(f"np.sum(mat): {np.sum(mat)}")
-            self.explore()
-        elif flip(fidelity / MAX_FIDELITY):
+        
+        choice = flip(fidelity / MAX_FIDELITY)
+        
+        if choice: 
             # Apply weight of pheromone concentrations onto turning kernel 
             weighted_matrix = mat * self.tk.calc(self.direction)
             if DEBUG: print(f"weighted_matrix:\n{weighted_matrix}")
             # Normalize Matrix
             normalized_matrix = weighted_matrix/weighted_matrix.sum()
             if DEBUG: print(f"normalized_matrix:\n{normalized_matrix}")
-            outcome = roll8(normalized_matrix, self.direction)
-            self.x += outcome//3 -1
-            self.y -= outcome%3 - 1
-            self.direction = DIRECTIONS[outcome%3][outcome//3]
-            if DEBUG: print(f"I'm going: {self.direction}")
+            
+            outcome:int = self.forking(normalized_matrix)
+            #print(outcome)
+            match outcome:
+                case -1:
+                    self.explore()
+                case None:
+                    print(f"NONE CASE\n{normalized_matrix}\n{weighted_matrix}")
+                    self.explore()
+                case _:        
+                    # print(outcome)
+                    self.x += outcome//3 -1
+                    self.y -= outcome%3 - 1
+                    self.direction = DIRECTIONS[outcome%3][outcome//3]
+                    if DEBUG: print(f"I'm going: {self.direction}")
+                    self.lost = False
         else:
             self.explore()
-            return None
+
+    def is_lost(self,)->bool:
+        return self.lost ==True
 
     def get_adj(self,pheromone): 
         adj_tiles = pheromone[self.x-1:self.x+2,self.y-1:self.y+2]
@@ -265,7 +317,7 @@ class Sim_Window():
         self.WINDOW_SIZE = wSize
         self.GRID_SIZE = gridSize  # Number of squares in each row and column
         self.SQUARE_SIZE =self.WINDOW_SIZE[0] // self.GRID_SIZE
-        
+        self.font = pygame.freetype.SysFont('Comic Sans MS', 30)
         # Colors
         self.WHITE = (255, 255, 255)
         self.BLACK = (0, 0, 0)
@@ -274,19 +326,25 @@ class Sim_Window():
         # Main loop
         self.running = True
 
-    def update(self, pheromone, agents):
+    def metrics(self, lost:int, time: int):
+        self.font.render_to(self.screen,(80,40),f"ANTS LOST:{lost}", self.WHITE)
+        self.font.render_to(self.screen,(80,80),f"SIM. TIME: {int(time)}", self.WHITE)
+        self.font.render_to(self.screen,(80,120),f"Fid. Range: ({MIN_FIDELITY}-{MAX_FIDELITY}%)", self.WHITE)
+        pass
+
+    def update(self, pheromone, agents, lost):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
      
         # Clear the screen
         self.screen.fill(self.BLACK)
-     
         # Draw the grid of squares based on the data
         for row in range(self.GRID_SIZE):
             for col in range(self.GRID_SIZE):
                 if nboard[row][col]:
-                    pygame.draw.rect(self.screen, self.WHITE, (col * self.SQUARE_SIZE, row * self.SQUARE_SIZE, self.SQUARE_SIZE, self.SQUARE_SIZE))
+                    pygame.draw.rect(self.screen, self.WHITE, 
+                        (col * self.SQUARE_SIZE, row * self.SQUARE_SIZE, self.SQUARE_SIZE, self.SQUARE_SIZE))
                     continue
                 
                 data_value = pheromone[row][col]
@@ -294,8 +352,10 @@ class Sim_Window():
                 if data_value >= 255:
                     data_value = 255
                 color = (data_value, 0, 0, data_value)
-                pygame.draw.rect(self.screen, color, (col * self.SQUARE_SIZE, row * self.SQUARE_SIZE, self.SQUARE_SIZE, self.SQUARE_SIZE))
+                pygame.draw.rect(self.screen, color, 
+                    (col * self.SQUARE_SIZE, row * self.SQUARE_SIZE, self.SQUARE_SIZE, self.SQUARE_SIZE))
          
+        self.metrics(lost, ctime) 
         # Update the display
         pygame.display.flip()
     
@@ -304,9 +364,13 @@ class Sim_Window():
         pygame.quit()
         sys.exit()
 
-    def save_to_disc(self):
-        name = f"{'-'.join(time.ctime().split()[1:4])}-{TK}-{agents}-{max_time}-{tao}.jpg"
-        pygame.image.save(self.screen, f"img/{name}") 
+    def save_to_disc(self, extra:str|int):
+        
+        name = f"{'-'.join(START_TIME)}-{args.kernel}-{agents}-{max_time}-{tao}-{extra}.jpg"
+        if not args.imgsubdir == "":
+            pygame.image.save(self.screen, f"img/{args.imgsubdir}/{name}") 
+        else:
+            pygame.image.save(self.screen, f"img/{name}") 
 
 def split_list(long_list:list, chunk_size:int)->list[list]:
     if not (len(long_list) >6):
@@ -330,9 +394,10 @@ def updatePheromone(pheromone_c, x,y):
     pheromone_concentration = np.maximum(pheromone_c,0)
     return pheromone_concentration
 
-def process_section(section_agents:list[Agent])->tuple[list[Agent],list[int],list[int]]:
+def process_section(section_agents:list[Agent])->tuple[list[Agent],list[int],list[int], int]:
     _ytmp = []
     _xtmp = []
+    lost  = 0
     for ant in section_agents:
         
         _x,_y = ant.get_position()
@@ -342,8 +407,9 @@ def process_section(section_agents:list[Agent])->tuple[list[Agent],list[int],lis
         _xtmp.append(_x) 
         _ytmp.append(_y)
         ant.update(pheromone_concentration)
+        lost += ant.is_lost()
 
-    return (section_agents, _xtmp, _ytmp)
+    return (section_agents, _xtmp, _ytmp, lost)
 
 if __name__ == "__main__":
     # main program loop
@@ -363,7 +429,9 @@ if __name__ == "__main__":
     #         values=[[.25,.3,.25],
     #                 [.1,0,.1],
     #                 [.0,0,.0]])
-    flat_tk = TurningKernel(values=[[1/8,1/8,1/8],[1/8,0,1/8],[1/8,1/8,1/8]])
+    flat_tk = TurningKernel(values=[[1/8,1/8,1/8],
+                                    [1/8,0,1/8],
+                                    [1/8,1/8,1/8]])
    
     #NOTE: Setting up multiprocessing
     processes = 6
@@ -391,6 +459,7 @@ if __name__ == "__main__":
             
             all_agents.append(Agent(tk=TK))
         
+        lost = 0
         
         nboard = board.copy()
         # NOTE: if more than 6 ants start multiprocessing
@@ -401,10 +470,12 @@ if __name__ == "__main__":
             # Perform computations on each chunk in parallel
                 r = pool.map(process_section, list_chunks)
                 
+                # Flatten the results list
                 results:list[Agent]       = [f for t in r for f in t[0]]
                 xtmp:list[int]            = [f for t in r for f in t[1]]
                 ytmp:list[int]            = [f for t in r for f in t[2]]
-                # Flatten the results list
+                lost:int                  = sum([t[3] for t in r])
+                
             # Update the original list with the processed results
             
             nboard[xtmp,ytmp] = 1
@@ -423,10 +494,14 @@ if __name__ == "__main__":
                 ytmp.append(_y)
                 nboard[_x][_y] = 1
                 ant.update(pheromone_concentration)
+                lost += ant.is_lost()
+            
+            
+        if ctime %ss_freq == 0: 
+            sim.save_to_disc(ctime//ss_freq)
         #print(f"xtmp:{xtmp}\nytmp:{ytmp}") 
         pheromone_concentration =  updatePheromone(pheromone_concentration, xtmp, ytmp)
-        sim.update(np.multiply(pheromone_concentration, 255//tao), nboard)
-        print(f"time:\t\t{ctime}") 
+        sim.update(np.multiply(pheromone_concentration, 255//tao), nboard, lost)
 
-    sim.save_to_disc()
+    sim.save_to_disc("fstate")
     sim.close() 
