@@ -4,42 +4,38 @@ import numpy as np
 import sys
 import time
 
-from model import MAX_FIDELITY, START_TIME
-
 class Sim_Window():
-    def __init__(self, wSize=(400, 400), gridSize:int=100, ):
-
-        # Initialize Pygame
-        pygame.init()
+    def __init__(self, **kwargs):
+        
+        # KWARGS 
+        self.kernel = kwargs.get('kernel',)
+        self.agents = kwargs.get('agents',100)
+        self.MIN_FIDELITY = kwargs.get('min_fidelity',0)
+        self.MAX_FIDELITY = kwargs.get('MAX_FIDELITY',100)
+        self.MAX_PHEROMONE_STRENGTH = kwargs.get('MAX_PHEROMONE_STRENGTH', 3)
+        self.max_time = kwargs.get('max_time',1500)
+        self.tao = kwargs.get('tao', 10) 
+        self.WINDOW_SIZE = kwargs.get('window_size',(400,400))
+        self.GRID_SIZE = kwargs.get('grid_size',100)  # Number of squares in each row and column
+        
         # Constants
         self.START_TIME = '-'.join(time.ctime().split()[1:4])
-        self.WINDOW_SIZE = wSize
-        self.GRID_SIZE = gridSize  # Number of squares in each row and column
         self.SQUARE_SIZE =self.WINDOW_SIZE[0] // self.GRID_SIZE
-        self.font = pygame.freetype.SysFont('Comic Sans MS', 30)
+        
         # Colors
         self.WHITE = (255, 255, 255)
         self.BLACK = (0, 0, 0)
+        
+        # Pygame
+        pygame.init() 
+        self.font = pygame.freetype.SysFont('Comic Sans MS', 30)
         self.screen = pygame.display.set_mode(self.WINDOW_SIZE)
         pygame.display.set_caption(f"Agent Model") 
-        # Main loop
-        self.running = True
-
-    def set_constants(self, tao, max_time, kernel, agents, min_fidelity, max_fidelity):
-        
-        #FIXME: move to using kwards in the init function
-        self.kernel = kernel
-        self.agents = agents
-        self.MIN_FIDELITY = min_fidelity
-        self.MAX_FIDELITY = MAX_FIDELITY
-        self.max_time = max_time
-        self.tao = tao
-        pass
-
 
     def metrics(self, lost:int, time: int):
         '''
         Draw the metrics of the simulation onto the board.
+
         @param lost an integer describing how many ants are lost at the current time.
         @param time an integer describing the current time in the simulation
         @return None
@@ -47,7 +43,6 @@ class Sim_Window():
         self.font.render_to(self.screen,(80,40),f"ANTS LOST:{lost}", self.WHITE)
         self.font.render_to(self.screen,(80,80),f"SIM. TIME: {int(time)}", self.WHITE)
         self.font.render_to(self.screen,(80,120),f"Fid. Range: ({self.MIN_FIDELITY}-{self.MAX_FIDELITY}%)", self.WHITE)
-        pass
 
     def update(self, pheromone, ant_locs):
         '''
@@ -91,9 +86,27 @@ class Sim_Window():
         # Update the display
         pygame.display.flip()
     
+    def updatePheromone(self,pheromone_c, x,y):
+
+        #NOTE: update pheromone trails
+        for _x,_y in zip(x, y):
+            
+            if pheromone_c[_x][_y] >= self.tao*self.MAX_PHEROMONE_STRENGTH:
+                pheromone_c[_x][_y] = self.tao*self.MAX_PHEROMONE_STRENGTH
+            else:
+                pheromone_c[_x][_y] += self.tao
+
+        # pheromone_concentration[xtmp][ytmp] = tao
+        #NOTE: decrement all pheromone trails
+        pheromone_c  -= 1
+        #NOTE: prevent any negative values
+        pheromone_concentration = np.maximum(pheromone_c,0)
+        return pheromone_concentration
+
     def close(self, prg=True):
         '''
         Closes the simulation and possibly the program 
+        
         @param prg boolean value to determine whether we close the whole program 
                    in addition to the simulation window
         @return None
@@ -120,5 +133,5 @@ class Sim_Window():
         else:
             pygame.image.save(self.screen, f"img/{imgdir}/{name}") 
 
-
-
+if __name__ == "__main__":
+    pass

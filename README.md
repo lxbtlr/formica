@@ -24,7 +24,7 @@ There are a few dependencies for this project that need to be installed for the 
     ```
 
 ### Note 
-Installing them through your prefered method is fine -- I personally use nix :snowflake: to create a nix shell environment to load all dependencies easily from the default.nix file using the command:
+Installing these libraies through your prefered method is fine -- I personally use nix :snowflake: to create a nix shell environment to load all dependencies easily from the default.nix file using the command:
 ```
 nix-shell default.nix
 ```
@@ -43,4 +43,6 @@ python model.py -h
 ```
 
 # Simulation Settings & Configuration 
-EXPLAIN ARGS AND THEIR EFFECTS
+
+
+# High-level Code Overview

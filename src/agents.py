@@ -1,18 +1,34 @@
+from enum import Enum
 import numpy as np
+from model import MAX_FIDELITY
 import turningkernel as tk
 import helperfunctions as hf
 #TODO: Specify what is being imported explicitly
 
+class CardinalDirection(Enum):
+    NORTH = (0, 1)
+    NORTHEAST = (1, 1)
+    EAST = (1, 0)
+    SOUTHEAST = (1, -1)
+    SOUTH = (0, -1)
+    SOUTHWEST = (-1, -1)
+    WEST = (-1, 0)
+    NORTHWEST = (-1, 1)
+
+
 class Agent():
     def __init__(self, **kwargs):
-                # tk:tk.TurningKernel = tk.TurningKernel(),
-                # debug:bool=False):
+        # kwargs
+        self.tk             = kwargs.get('tk',tk.TurningKernel())
+        self.DEBUG          = kwargs.get('debug', False) 
+        self.MAX_SATURATION = kwargs.get('MAX_SATURATION',6)
+        self.MIN_FIDELITY   = kwargs.get('MIN_FIDELITY',6)
+        # Default constants
         self.saturation = 0
         self.x = 127
         self.y = 127
-        self.direction:int =  int(np.random.random()*8)*45
-        self.tk = kwargs.get('tk',tk.TurningKernel())
-        self.DEBUG = kwargs.get('debug', False) 
+        # Random first orientation
+        self.direction:int =  np.random.randint(0, 9)*45
                                 # in degrees
         #FIXME: Create a direction function / class that can be imported across classes
         if self.DEBUG: print(self.direction)
@@ -133,13 +149,7 @@ class Agent():
         # staying at the same position is not an option
         mat[1][1] = 0
 
-        input_percentage = self.saturation / MAX_SATURATION
-        # Map the input percentage to the output range
-        mapped_value = MIN_FIDELITY + (input_percentage * (MAX_FIDELITY - MIN_FIDELITY))
-        if mapped_value > MAX_FIDELITY: 
-            mapped_value = MAX_FIDELITY
-        fidelity = mapped_value
-        choice = hf.flip(fidelity / MAX_FIDELITY)
+        choice = hf.flip(hf.saturation_to_fidelity(csat=self.saturation, max_sat=self.MAX_SATURATION, min_fid=self.MIN_FIDELITY, )/MAX_FIDELITY)
         
         if not choice: 
             self.explore()
