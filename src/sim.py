@@ -3,14 +3,18 @@ import pygame.freetype
 import numpy as np
 import sys
 import time
+import os
+from src.helperfunctions import execution_times, timing
+from src.turningkernel import TurningKernel
 
 class Sim_Window():
-    def __init__(self, **kwargs):
-        
+    @timing("sim init")
+    def __init__(self, **kwargs): 
         # KWARGS 
-        self.kernel = kwargs.get('kernel',)
+        self.DEBUG = kwargs.get('DEBUG',False)
+        self.kernel = kwargs.get('kernel', "NA")
         self.agents = kwargs.get('agents',100)
-        self.MIN_FIDELITY = kwargs.get('min_fidelity',0)
+        self.MIN_FIDELITY = kwargs.get('MIN_FIDELITY',0)
         self.MAX_FIDELITY = kwargs.get('MAX_FIDELITY',100)
         self.MAX_PHEROMONE_STRENGTH = kwargs.get('MAX_PHEROMONE_STRENGTH', 3)
         self.max_time = kwargs.get('max_time',1500)
@@ -20,8 +24,9 @@ class Sim_Window():
         
         # Constants
         self.START_TIME = '-'.join(time.ctime().split()[1:4])
-        self.SQUARE_SIZE =self.WINDOW_SIZE[0] // self.GRID_SIZE
+        self.SQUARE_SIZE = self.WINDOW_SIZE[0] // self.GRID_SIZE
         
+        self.savedir = self.make_folder_path()
         # Colors
         self.WHITE = (255, 255, 255)
         self.BLACK = (0, 0, 0)
@@ -31,11 +36,21 @@ class Sim_Window():
         self.font = pygame.freetype.SysFont('Comic Sans MS', 30)
         self.screen = pygame.display.set_mode(self.WINDOW_SIZE)
         pygame.display.set_caption(f"Agent Model") 
+        
+    @timing("sim mk folder path")
+    def make_folder_path(self,)->str:
+        script_loc = os.path.dirname(os.path.abspath(sys.argv[0]))
+        folder_path = os.path.join(script_loc, "img",self.START_TIME)
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+        
+        return folder_path
 
+    @timing("sim metrics")
     def metrics(self, lost:int, time: int):
         '''
         Draw the metrics of the simulation onto the board.
-
+        
         @param lost an integer describing how many ants are lost at the current time.
         @param time an integer describing the current time in the simulation
         @return None
@@ -43,7 +58,8 @@ class Sim_Window():
         self.font.render_to(self.screen,(80,40),f"ANTS LOST:{lost}", self.WHITE)
         self.font.render_to(self.screen,(80,80),f"SIM. TIME: {int(time)}", self.WHITE)
         self.font.render_to(self.screen,(80,120),f"Fid. Range: ({self.MIN_FIDELITY}-{self.MAX_FIDELITY}%)", self.WHITE)
-
+        
+    @timing("sim update")
     def update(self, pheromone, ant_locs):
         '''
         Update the board with all new values for pheromones and ants on the board.
@@ -82,10 +98,13 @@ class Sim_Window():
                     color = (data_value, 0, 0, data_value)
                     pygame.draw.rect(self.screen, color, 
                         (col_num * self.SQUARE_SIZE, row_num * self.SQUARE_SIZE, self.SQUARE_SIZE, self.SQUARE_SIZE))
-         
+                    
         # Update the display
+    @timing("sim write")
+    def write(self,):
         pygame.display.flip()
     
+    @timing("sim update p")
     def updatePheromone(self,pheromone_c, x,y):
 
         #NOTE: update pheromone trails
@@ -95,7 +114,7 @@ class Sim_Window():
                 pheromone_c[_x][_y] = self.tao*self.MAX_PHEROMONE_STRENGTH
             else:
                 pheromone_c[_x][_y] += self.tao
-
+            
         # pheromone_concentration[xtmp][ytmp] = tao
         #NOTE: decrement all pheromone trails
         pheromone_c  -= 1
@@ -115,7 +134,8 @@ class Sim_Window():
         pygame.quit()
         if prg: sys.exit()
 
-    def save_to_disc(self, imgdir=None, extra:str|None=None):
+    @timing("sim save")
+    def save_to_disc(self, extra:str|None=None):
         '''
         Write state of pygame simulation to img/ directory
         @param imgdir The subdirectory for images to be saved to, 
@@ -125,13 +145,12 @@ class Sim_Window():
         @return None
         '''
         if extra is None:
-            name = f"{self.START_TIME}-{self.kernel}-{self.agents}-{self.max_time}-{self.tao}.jpg"
+            name = f"{self.kernel}-{self.agents}-{self.max_time}-{self.tao}.jpg"
         else:
-            name = f"{self.START_TIME}-{self.kernel}-{self.agents}-{self.max_time}-{self.tao}-{extra}.jpg"
-        if imgdir == "":
-            pygame.image.save(self.screen, f"img/{name}") 
-        else:
-            pygame.image.save(self.screen, f"img/{imgdir}/{name}") 
+            name = f"{self.kernel}-{self.agents}-{self.max_time}-{self.tao}-{extra}.jpg"
+        
+        pygame.image.save(self.screen, f"{self.savedir}/{name}") 
+        return None
 
 if __name__ == "__main__":
     pass

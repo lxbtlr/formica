@@ -22,6 +22,7 @@ args = parser.parse_args()
 
 # NOTE: this is serving as a preamble of init classes / importing parameters
 
+np.random.seed(0)
 DEBUG = False
 START_TIME = time.ctime().split()[1:4]
 PWD = getcwd()
@@ -76,6 +77,7 @@ class Agent():
         self.ontrail = False
         self.lost = True
         self.tk= tk
+        self.min_distance = .10
 
     def get_position(self):
         return (self.x, self.y)
@@ -117,7 +119,6 @@ class Agent():
         
         #NOTE: Case 2: if there are two or more trails of ~ the same strength, explore
         
-        min_distance = .10
         
         weighted_matrix = matrix * self.tk.calc(self.direction)
         if DEBUG: print(f"weighted_matrix:\n{weighted_matrix}")
@@ -134,7 +135,7 @@ class Agent():
         # Calculate absolute differences between the three smallest values
         absolute_differences = np.diff(strongest_trails)
         # Check if all absolute differences are within the minimum distance
-        are_within_distance = all(abs(diff) <= min_distance 
+        are_within_distance = all(abs(diff) <= self.min_distance 
                                   for diff in absolute_differences)
         
         if are_within_distance:
@@ -308,7 +309,7 @@ def saturation_to_fidelity( sat:int )->float:
 
 
 class Sim_Window():
-    def __init__(self, wSize=(400, 400), gridSize:int=100, ):
+    def __init__(self, wSize=(400, 400), gridSize:int=255, ):
 
         # Initialize Pygame
         pygame.init()
@@ -367,9 +368,9 @@ class Sim_Window():
         
         name = f"{'-'.join(START_TIME)}-{args.kernel}-{agents}-{max_time}-{tao}-{extra}.jpg"
         if not args.imgsubdir == "":
-            pygame.image.save(self.screen, f"img/{args.imgsubdir}/{name}") 
+            pygame.image.save(self.screen, f"../img/{args.imgsubdir}/{name}") 
         else:
-            pygame.image.save(self.screen, f"img/{name}") 
+            pygame.image.save(self.screen, f"../img/{name}") 
 
 def split_list(long_list:list, chunk_size:int)->list[list]:
     if not (len(long_list) >6):
@@ -496,8 +497,8 @@ if __name__ == "__main__":
                 lost += ant.is_lost()
             
             
-        if ctime %ss_freq == 0: 
-            sim.save_to_disc(ctime//ss_freq)
+        #if ctime %ss_freq == 0: 
+        #    sim.save_to_disc(ctime//ss_freq)
         #print(f"xtmp:{xtmp}\nytmp:{ytmp}") 
         pheromone_concentration =  updatePheromone(pheromone_concentration, xtmp, ytmp)
         sim.update(np.multiply(pheromone_concentration, 255//tao), nboard, lost)

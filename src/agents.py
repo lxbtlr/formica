@@ -1,53 +1,53 @@
 from enum import Enum
 import numpy as np
-from model import MAX_FIDELITY
-import turningkernel as tk
-import helperfunctions as hf
+from src.turningkernel import TurningKernel
+import src.helperfunctions as hf
+from src.helperfunctions import execution_times, timing
 #TODO: Specify what is being imported explicitly
 
-class CardinalDirection(Enum):
-    NORTH = (0, 1)
-    NORTHEAST = (1, 1)
-    EAST = (1, 0)
-    SOUTHEAST = (1, -1)
-    SOUTH = (0, -1)
-    SOUTHWEST = (-1, -1)
-    WEST = (-1, 0)
-    NORTHWEST = (-1, 1)
 
+DIRECTIONS = ((1, 0),(0, 0),(0, 1),
+              (0, 2),(0,0), (1, 2),
+              (2, 2),(2, 1),(2, 0),
+                     (0, 0))
 
 class Agent():
+    @timing("agent init")
     def __init__(self, **kwargs):
         # kwargs
-        self.tk             = kwargs.get('tk',tk.TurningKernel())
+        self.tk             = kwargs.get('tk',TurningKernel())
         self.DEBUG          = kwargs.get('debug', False) 
         self.MAX_SATURATION = kwargs.get('MAX_SATURATION',6)
-        self.MIN_FIDELITY   = kwargs.get('MIN_FIDELITY',6)
+        self.MIN_FIDELITY   = kwargs.get('MIN_FIDELITY',90)
+        self.MAX_FIDELITY   = kwargs.get('MAX_FIDELITY',100)
         # Default constants
         self.saturation = 0
         self.x = 127
         self.y = 127
         # Random first orientation
-        self.direction:int =  np.random.randint(0, 9)*45
-                                # in degrees
-        #FIXME: Create a direction function / class that can be imported across classes
+        self.direction:int =  np.random.randint(0,8)*45  # in degrees
         if self.DEBUG: print(self.direction)
         self.lost = True
 
+    @timing("agent pos")
     def get_position(self):
         return (self.x, self.y)
 
+    @timing("agent explore")
     def explore(self):
         matrix = self.tk.calc(direction=self.direction)
         if self.DEBUG: print(f"Exploring ({self.direction}):\n{matrix}")
         outcome = hf.roll8(matrix, self.direction)
-        self.x += outcome//3 -1
-        self.y -= outcome%3 - 1
-        self.direction = DIRECTIONS[outcome%3][outcome//3]
+        if self.DEBUG: print(f"out:{outcome}")
+        tmpr = np.radians(self.direction) 
+        self.x += int(np.round(np.cos(tmpr)))
+        self.y -= int(np.round(np.sin(tmpr)))
+        self.direction = (outcome)*45
         if self.DEBUG: print(f"I'm going: {self.direction}")
         self.lost = True
 
     # TODO: Add second forking algorithm
+    @timing("agent forking")
     def forking(self,matrix)->int:
         ''' 
         This function interprets the forking algorithm that is explicitly 
@@ -64,13 +64,15 @@ class Agent():
         
         #NOTE: Case 0: if there is no trails sensed, explore
         if np.sum(matrix) ==0:
+            if self.DEBUG: print("Case 0: Explore")
             return -1
         
 
-        #NOTE: Case 1: if there is trail straight ahead, follow it
+        #NOTE: Case 1: if there is trail straight ahead, follow it 
 
-        x, y = hf.deg2position(self.direction)
+        x, y = DIRECTIONS[(self.direction//45)] 
         if matrix[x][y] > 0:
+            if self.DEBUG: print("Case 1: forward")
             return (y*3)+x
         
         #NOTE: Case 2: if there are two or more trails of ~ the same strength, explore
@@ -87,15 +89,16 @@ class Agent():
         flattened = np.nan_to_num(flattened)
         
         sorted_ind = np.argsort(flattened)
-        # Extract the three smallest values based on sorted indices
+        # Extract the three largest values based on sorted indices
         strongest_trails = flattened[sorted_ind[-3:]]
-        # Calculate absolute differences between the three smallest values
+        # Calculate absolute differences between the three largest values
         absolute_differences = np.diff(strongest_trails)
         # Check if all absolute differences are within the minimum distance
         are_within_distance = all(abs(diff) <= min_distance 
                                   for diff in absolute_differences)
         
         if are_within_distance:
+            if self.DEBUG: print("Case 2: Determine if there is a fork")
             return -1
         
         #NOTE: Case 3: if neither case above is true, take the 
@@ -118,13 +121,16 @@ class Agent():
         
         #NOTE: Using the sorted_ind array since we want the indicies, 
         # not the values
+
+        if self.DEBUG: print("Case 3: Strongest trail")
         if choice:
             return sorted_ind[-2]
         else:
             return sorted_ind[-1]
 
+    @timing("agent update t")
     def update_trail(self,update:bool|None=None):
-        if (not self.saturation == 0) or (self.saturation < MAX_SATURATION):
+        if (not self.saturation == 0) or (self.saturation < self.MAX_SATURATION):
             return None
         match update:
             case False:    
@@ -133,6 +139,7 @@ class Agent():
                 self.saturation +=1
                 
 
+    @timing("agent update")
     def update(self, pc):
         # using current position, check what is next it, 
         mat = self.get_adj(pc)
@@ -149,7 +156,8 @@ class Agent():
         # staying at the same position is not an option
         mat[1][1] = 0
 
-        choice = hf.flip(hf.saturation_to_fidelity(csat=self.saturation, max_sat=self.MAX_SATURATION, min_fid=self.MIN_FIDELITY, )/MAX_FIDELITY)
+        choice = hf.flip(hf.saturation_to_fidelity(csat=self.saturation, 
+                            max_sat=self.MAX_SATURATION, min_fid=self.MIN_FIDELITY, )/self.MAX_FIDELITY)
         
         if not choice: 
             self.explore()
@@ -163,7 +171,6 @@ class Agent():
         if self.DEBUG: print(f"normalized_matrix:\n{normalized_matrix}")
         
         outcome:int = self.forking(normalized_matrix)
-        #print(outcome)
         match outcome:
             case -1:
                 self.explore()
@@ -172,19 +179,24 @@ class Agent():
                 self.explore()
             case _:        
                 # print(outcome)
-                self.x += outcome//3 -1
-                self.y -= outcome%3 - 1
-                self.direction = DIRECTIONS[outcome%3][outcome//3]
+                if self.DEBUG: print(f"out:{outcome}")
+                tmpr = np.radians(self.direction) 
+                self.x += int(np.round(np.cos(tmpr)))
+                self.y -= int(np.round(np.sin(tmpr)))
+                self.direction = (outcome)*45
                 if self.DEBUG: print(f"I'm going: {self.direction}")
                 self.lost = False
 
+    @timing("agent lost")
     def is_lost(self,)->bool:
         return self.lost ==True
 
+    @timing("agent getadj")
     def get_adj(self,pheromone): 
         adj_tiles = pheromone[self.x-1:self.x+2,self.y-1:self.y+2]
         return adj_tiles
 
+    @timing("agent reset")
     def reset(self):
         self.saturation = 0
         self.x = 127
