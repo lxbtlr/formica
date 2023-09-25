@@ -56,7 +56,7 @@ python model.py --debug --agents 5
 ```
 
 ### side-note
-One of my goals for this project was to practice refactoring the code base. This 
+One of my goals for this project was to practice refactoring the code base. This heppened
 throughout the coding process, but most significantly in the last week on the refactor
 branch. That code has been merged and does run **however**, you will immediately 
 notice there is a problem... THE ANTS ARE ONLY IN ONE QUARTER OF THE SCREEN. The
