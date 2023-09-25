@@ -19,6 +19,7 @@ parser.add_argument("--debug",action='store_true', help='print debug messages to
 parser.add_argument("--ssfreq", default=10, type=int, help="How frequently a ss should be taken")
 args = parser.parse_args()
 
+# Same Random
 np.random.seed(0)
 
 # NOTE: this is serving as a preamble of init classes / importing parameters
@@ -27,9 +28,13 @@ MAX_FIDELITY:float = 100
 MIN_FIDELITY:float = 95
 MAX_SATURATION:int = 30
 MAX_PHEROMONE_STRENGTH:int = 10
+
+# How often to Screen shot
 ss_freq:int = args.ssfreq
-tao = args.tao
-agents = args.agents
+
+
+tao = np.abs(args.tao)
+agents = np.abs(args.agents)
 max_time = args.max_time
 
 board = np.zeros((args.board,args.board))
