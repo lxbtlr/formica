@@ -48,6 +48,13 @@ To learn more about the arguments that can be passed into this model, run:
 python model.py -h
 ```
 
+To see more of the step by step processing that is going on under the hood, pass the debug 
+flag (as shown below) to toggle some print statements. To make the output more understandable I 
+would recommend starting with a low number of ants.
+```
+python model.py --debug --agents 5
+```
+
 ### side-note
 One of my goals for this project was to practice refactoring the code base. This 
 throughout the coding process, but most significantly in the last week on the refactor
