@@ -70,12 +70,13 @@ One of the major outcomes from the refactor was the change in program architectu
 one main file to multiple files with distinct roles. Since the main goal of the refactor 
 was to "make the code better", one angle I investigated was runtime. I got the 
 idea that a major time sink might have been the display but I needed to prove it. 
+
 To that end I created the timing decorator function (see src/helperfunctions.py) to record how long it takes for a given function to
 execute each time it is called. To make that data more useful I added a few functions 
-to compute useful metrics and boom, you get the [[Example table]] below. This became important 
+to compute useful metrics and boom, you get the table below. This became important 
 as it revealed to me that the refactored version of my display function was 
 actually much slower than my original... so much so that I reverted back to the 
-original draw function. 
+original drawing mechanism. 
 
 ## Example table
 | function | Mean | Median | Standard Deviation | Variance | Min | Max | Count | Total Time |
