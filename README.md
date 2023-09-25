@@ -14,6 +14,7 @@ There are a few dependencies for this project that need to be installed for the 
 - Python 3.10+
 - Python Libraries:
     ```
+    matplotlib
     numpy
     pandas
     pygame
