@@ -24,13 +24,18 @@ There are a few dependencies for this project that need to be installed for the 
     ```
 
 ### Note 
+#### Nix
 Installing these libraies through your prefered method is fine -- I personally use nix :snowflake: to create a nix shell environment to load all dependencies easily from the default.nix file using the command:
 ```
 nix-shell default.nix
 ```
+#### Additional Dependencies
+If you look across the files in this repository, you may notice there are a few extra libraries 
+then mentioned in the dependencies section. While they are being used, they're very pheripheral 
+and do not impact how the code functions to simulating ants, instead, they mostly helped with debugging
+or working with the code a little bit nicer (the biggest offenders are ArgParse & csv)
 
 # Usage
-
 
 There are many arguments that can be passed into the script to modify the output 
 of the code. However, to run the default/unchanged version you only need to run:
@@ -43,7 +48,7 @@ To learn more about the arguments that can be passed into this model, run:
 python model.py -h
 ```
 
-## side-note
+### side-note
 One of my goals for this project was to practice refactoring the code base. This 
 throughout the coding process, but most significantly in the last week on the refactor
 branch. That code has been merged and does run **however**, you will immediately 
