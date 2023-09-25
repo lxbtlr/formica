@@ -1,15 +1,17 @@
+import matplotlib.pyplot as mpl
 import numpy as np
+import csv 
 import time
 import multiprocessing
 
-DIRECTIONS= np.array([[315, 0, 45],[270, -1, 90],[225, 180,135]])
+DIRECTIONS= np.array([[315, 0, 45],
+                      [270, -1, 90],
+                      [225, 180,135]])
 
+displacement = np.array([[(-1,1),(0,1),(1,1)],
+                         [(-1,0),(0,0),(1,0)],
+                         [(-1,-1),(0,-1),(1,-1)]])
 
-def round6(value):
-    if value == 0:
-        return 0.0
-    else:
-        return round(value, 6 - int(np.floor(np.log10(abs(value)))))
 
 execution_times = {}
 def timing(identifier):
@@ -27,24 +29,74 @@ def timing(identifier):
         return wrapper
     return decorator
 
+@timing("hf d2pos")
+def deg2position(degrees):
+    if degrees == 360: degrees = 0
+    ind = np.where(DIRECTIONS == degrees)
+    x,y = ind
+    print(x,y)
+    dx, dy = displacement[x[0]][y[0]]
+    return dx, dy
+
+@timing("hf r6")
+def round6(value):
+    if value == 0:
+        return 0.0
+    else:
+        return round(value, 6 - int(np.floor(np.log10(abs(value)))))
 @timing("hf stat")
 def calculate_statistics(input_dict):
     result_dict = {}
-    for key, values in input_dict.items():
-        if values:
-            statistics_dict = {}
-            values_array = np.array(values)
-            
-            statistics_dict["mean"]     = round6(np.mean(values_array))
-            statistics_dict["median"]   = round6(np.median(values_array))
-            statistics_dict["std_dev"]  = round6(np.std(values_array))
-            statistics_dict["variance"] = round6(np.var(values_array))
-            statistics_dict["min"]      = round6(np.min(values_array))
-            statistics_dict["max"]      = round6(np.max(values_array))
-            statistics_dict["count"]    = round6(len(values_array)   )
-            statistics_dict["total_t"]  = round6(np.sum(values_array))
-            result_dict[key] = statistics_dict
+    inny = input_dict.copy()
+    for key, values in inny.items():
+        statistics_dict = {}
+        values_array = np.array(values)        
+
+        statistics_dict["mean"]     = round6(np.mean(values_array))
+        statistics_dict["median"]   = round6(np.median(values_array))
+        statistics_dict["std_dev"]  = round6(np.std(values_array))
+        statistics_dict["variance"] = round6(np.var(values_array))
+        statistics_dict["min"]      = round6(np.min(values_array))
+        statistics_dict["max"]      = round6(np.max(values_array))
+        statistics_dict["count"]    = round6(len(values_array)   )
+        statistics_dict["total_t"]  = round6(np.sum(values_array))
+        
+        result_dict[key] = statistics_dict
     return result_dict
+
+@timing("hf writestats")
+def write_stats(results):
+    with open('results.csv', mode='w', newline='') as csv_file:
+        fieldnames = ['function', 'Mean', 'Median', 'Standard Deviation', 'Variance', 'Min', 'Max', 'Count', 'Total Time']
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
+        for list_name, statistics in results.items():
+            writer.writerow({
+                'function': list_name,
+                'Mean': statistics['mean'],
+                'Median': statistics['median'],
+                'Standard Deviation': statistics['std_dev'],
+                'Variance': statistics['variance'],
+                'Min': statistics['min'],
+                'Max': statistics['max'],
+                'Count': statistics['count'],
+                'Total Time':statistics['total_t']
+            })
+
+@timing("hf boardnorm")
+def boardnorm(data):
+    total = np.zeros((len(data[0]),len(data[0])))
+    for d in data:
+        total += d
+    norm = np.linalg.norm(total,1)
+    ntotal = total / norm
+    return ntotal
+
+
+@timing("hf savefig")
+def save_figure(data, **kwargs):
+    mpl.imshow(data, cmap='gray_r', vmin=0, vmax=kwargs.get('max',1))
+    mpl.savefig(f"{kwargs.get('dir','img')}/{kwargs.get('name','heatmap')}.png", bbox_inches='tight')  
 
 @timing("hf rot45")
 def rot45(matrix, direction="left"):
@@ -91,15 +143,6 @@ def roll8(nmatrix, direction)->int:
     '''
     flat = nmatrix.ravel()
     flat = np.nan_to_num(flat)
-    #if flat[np.argpartition(flat,-2)[-2:]].sum() > .9 and flat.sum() != 0:
-    #    #branches = np.count_nonzero(flat==np.max(flat))
-    #    #if branches>2:
-    #    #FIXME: THIS NEEDS TO BE CHANGED
-
-    #    x,y  = deg2position(direction)
-    #    outcome:int = int(x + y*3)
-    #else:
-    #    outcome:int = int(np.random.choice(range(0,9),1,p=flat))
     outcome:int = int(np.random.choice(range(0,9),1,p=flat))
     return outcome
 
@@ -138,23 +181,6 @@ def process_section(board_dimensions:int,pc,section_agents:list)->tuple[list,lis
 
     return (section_agents, _xtmp, _ytmp, lost)
 
-#def multi(boardShape, list_chunks, pheromeone_concentration, processes=10):
-#    #list_chunks = list(split_list(all_agents,processes))
-#    with multiprocessing.Pool(processes=processes) as pool:
-#    # Perform computations on each chunk in parallel
-#        r = pool.map(process_section, boardShape, pheromeone_concentration, list_chunks)
-#        
-#        # Flatten the results list
-#        results:list[Agent]       = [f for t in r for f in t[0]]
-#        xtmp:list[int]            = [f for t in r for f in t[1]]
-#        ytmp:list[int]            = [f for t in r for f in t[2]]
-#        lost:int                  = sum([t[3] for t in r])
-#        
-#    # Update the original list with the processed results
-#    
-#    nboard[xtmp,ytmp] = 1
-#    all_agents = results
-#    pheromone_concentration = updatePheromone(pheromone_concentration, xtmp, ytmp)
 
 if __name__ == "__main__":
     pass

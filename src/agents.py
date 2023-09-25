@@ -6,10 +6,10 @@ from src.helperfunctions import execution_times, timing
 #TODO: Specify what is being imported explicitly
 
 
-DIRECTIONS = ((1, 0),(0, 0),(0, 1),
-              (0, 2),(0,0), (1, 2),
-              (2, 2),(2, 1),(2, 0),
-                     (0, 0))
+#DIRECTIONS = ((1, 0),(0, 0),(0, 1),
+#              (0, 2),(0,0), (1, 2),
+#              (2, 2),(2, 1),(2, 0),
+#                     (0, 0))
 
 class Agent():
     @timing("agent init")
@@ -17,15 +17,15 @@ class Agent():
         # kwargs
         self.tk             = kwargs.get('tk',TurningKernel())
         self.DEBUG          = kwargs.get('debug', False) 
-        self.MAX_SATURATION = kwargs.get('MAX_SATURATION',6)
-        self.MIN_FIDELITY   = kwargs.get('MIN_FIDELITY',90)
+        self.MAX_SATURATION = kwargs.get('MAX_SATURATION',20)
+        self.MIN_FIDELITY   = kwargs.get('MIN_FIDELITY',60)
         self.MAX_FIDELITY   = kwargs.get('MAX_FIDELITY',100)
         # Default constants
         self.saturation = 0
         self.x = 127
         self.y = 127
         # Random first orientation
-        self.direction:int =  np.random.randint(0,8)*45  # in degrees
+        self.direction:int =  np.random.randint(0,4)*90  # in degrees
         if self.DEBUG: print(self.direction)
         self.lost = True
 
@@ -39,16 +39,19 @@ class Agent():
         if self.DEBUG: print(f"Exploring ({self.direction}):\n{matrix}")
         outcome = hf.roll8(matrix, self.direction)
         if self.DEBUG: print(f"out:{outcome}")
-        tmpr = np.radians(self.direction) 
-        self.x += int(np.round(np.cos(tmpr)))
-        self.y -= int(np.round(np.sin(tmpr)))
-        self.direction = (outcome)*45
+        self.direction = outcome*45
+        
+        x, y = hf.deg2position(self.direction)
+        self.x += x 
+        self.y += y 
+
         if self.DEBUG: print(f"I'm going: {self.direction}")
         self.lost = True
+        if self.DEBUG: print("++++++++++++++++++++++")
 
     # TODO: Add second forking algorithm
     @timing("agent forking")
-    def forking(self,matrix)->int:
+    def forking(self,matrix)->tuple[int,int]:
         ''' 
         This function interprets the forking algorithm that is explicitly 
         defined in the original paper.
@@ -58,26 +61,29 @@ class Agent():
         3 ,>A<, 5
         6 , 7 , 8 
 
-        @return position the forking algorithm has chosen to move into
+        @return position the position the forking algorithm has chosen to move into
         where -1 means explore
         '''
         
         #NOTE: Case 0: if there is no trails sensed, explore
         if np.sum(matrix) ==0:
             if self.DEBUG: print("Case 0: Explore")
-            return -1
+            return (1,1)
         
 
         #NOTE: Case 1: if there is trail straight ahead, follow it 
-
-        x, y = DIRECTIONS[(self.direction//45)] 
+        print(self.direction, end=" | ")
+        x, y = hf.deg2position(self.direction)
+        print(x,y)
+ 
+        # x, y = DIRECTIONS[(self.direction//45)] 
         if matrix[x][y] > 0:
             if self.DEBUG: print("Case 1: forward")
-            return (y*3)+x
+            return (x,y)
         
         #NOTE: Case 2: if there are two or more trails of ~ the same strength, explore
         
-        min_distance = .10
+        min_distance = .010
         
         weighted_matrix = matrix * self.tk.calc(self.direction)
         if self.DEBUG: print(f"weighted_matrix:\n{weighted_matrix}")
@@ -99,7 +105,7 @@ class Agent():
         
         if are_within_distance:
             if self.DEBUG: print("Case 2: Determine if there is a fork")
-            return -1
+            return (1,1)
         
         #NOTE: Case 3: if neither case above is true, take the 
         # stronger of the options
@@ -108,25 +114,15 @@ class Agent():
         ntop2 = top2 / top2.sum()
         choice = hf.flip(ntop2[0])
         
-        #HACK: This is a great example of how to NOT use match case statments
-        #print(f"NTOP2: {ntop2}\ntop2: {top2}\nchoice: {choice}")
-        #match choice:
-        #    case True:
-        #        # print("path chosen",True, sorted_ind[0])
-        #        return sorted_ind[-1]
-        #    case False:
-        #        # print("path chosen",False, sorted_ind[1])
-        #        return sorted_ind[-2]
-        #return
-        
         #NOTE: Using the sorted_ind array since we want the indicies, 
         # not the values
 
         if self.DEBUG: print("Case 3: Strongest trail")
+        print(sorted_ind[-2:])
         if choice:
-            return sorted_ind[-2]
+            return tuple(hf.displacement[sorted_ind[-2]%3][sorted_ind[-1]//3])
         else:
-            return sorted_ind[-1]
+            return tuple(hf.displacement[sorted_ind[-1]%3][sorted_ind[-2]//3])
 
     @timing("agent update t")
     def update_trail(self,update:bool|None=None):
@@ -138,6 +134,7 @@ class Agent():
             case True:    
                 self.saturation +=1
                 
+        return None
 
     @timing("agent update")
     def update(self, pc):
@@ -149,15 +146,17 @@ class Agent():
             if self.DEBUG: print(f"old mat:\n{mat}")
             mat = np.resize(mat, [3,3])
        
-        if self.DEBUG: print(f"matrix:\n{mat}")
+        if self.DEBUG: print(f"dir:{self.direction}\nmatrix:\n{mat}")
         
         self.update_trail(mat[1][1]>0)
        
         # staying at the same position is not an option
         mat[1][1] = 0
-
-        choice = hf.flip(hf.saturation_to_fidelity(csat=self.saturation, 
-                            max_sat=self.MAX_SATURATION, min_fid=self.MIN_FIDELITY, )/self.MAX_FIDELITY)
+        fid = hf.saturation_to_fidelity(csat=self.saturation, 
+                                max_sat=self.MAX_SATURATION, 
+                                min_fid=self.MIN_FIDELITY, )
+        
+        choice = hf.flip(fid/self.MAX_FIDELITY)
         
         if not choice: 
             self.explore()
@@ -170,22 +169,27 @@ class Agent():
         normalized_matrix = weighted_matrix/weighted_matrix.sum()
         if self.DEBUG: print(f"normalized_matrix:\n{normalized_matrix}")
         
-        outcome:int = self.forking(normalized_matrix)
-        match outcome:
-            case -1:
-                self.explore()
-            case None:
-                print(f"NONE CASE\n{normalized_matrix}\n{weighted_matrix}")
-                self.explore()
-            case _:        
-                # print(outcome)
-                if self.DEBUG: print(f"out:{outcome}")
-                tmpr = np.radians(self.direction) 
-                self.x += int(np.round(np.cos(tmpr)))
-                self.y -= int(np.round(np.sin(tmpr)))
-                self.direction = (outcome)*45
-                if self.DEBUG: print(f"I'm going: {self.direction}")
-                self.lost = False
+        outcome:tuple[int,int] = self.forking(normalized_matrix)
+        print(f"OUTCOME:{outcome}")
+        if outcome == (1,1):
+            self.explore()
+        else:
+            
+            self.x += outcome[0]
+            self.y += outcome[1]   #tmpr = np.radians(self.direction) 
+            #self.x += int(np.round(np.cos(tmpr)))
+            #self.y += int(np.round(np.sin(tmpr)))
+            #tx,ty = np.where(hf.displacement==outcome)
+            tx, ty = np.where(np.logical_and(hf.displacement[:, :, 0] == outcome[0], hf.displacement[:, :, 1] == outcome[1]))
+            _dir = hf.DIRECTIONS[tx[0]][ty[0]]
+            print(_dir)
+            
+            self.direction = _dir
+            
+            if self.DEBUG: print(f"I'm going: {self.direction}")
+            self.lost = False
+        if self.DEBUG: print("++++++++++++++++++++++")
+
 
     @timing("agent lost")
     def is_lost(self,)->bool:
@@ -201,7 +205,7 @@ class Agent():
         self.saturation = 0
         self.x = 127
         self.y = 127
-        self.direction:int =  int(np.random.random()*8)*45# in degrees
+        self.direction:int =  int(np.random.randint(0,4))*90# in degrees
 
 if __name__ == "__main__":
     pass

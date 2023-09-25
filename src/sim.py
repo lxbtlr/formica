@@ -7,6 +7,7 @@ import os
 from src.helperfunctions import execution_times, timing
 from src.turningkernel import TurningKernel
 
+
 class Sim_Window():
     @timing("sim init")
     def __init__(self, **kwargs): 
@@ -21,6 +22,7 @@ class Sim_Window():
         self.tao = kwargs.get('tao', 10) 
         self.WINDOW_SIZE = kwargs.get('window_size',(400,400))
         self.GRID_SIZE = kwargs.get('grid_size',100)  # Number of squares in each row and column
+        self.REFAC_FLAG = kwargs.get('refac',False)
         
         # Constants
         self.START_TIME = '-'.join(time.ctime().split()[1:4])
@@ -75,30 +77,47 @@ class Sim_Window():
         # Clear the screen
         self.screen.fill(self.BLACK)
         # Draw the grid of squares based on the data
-        combi = np.stack((pheromone, ant_locs), axis=-1)
-        for row_num, combi_row in enumerate(combi):
-            for col_num, combi_point in enumerate(combi_row):
-                # I could really use a c code like switch case statement right about now
-                if np.all(combi_point==0):
-                    #NOTE: Case where there is nothing to draw in this location
-                    continue 
-                
-                if combi_point[1]:
-                    #NOTE: Case where there is an ant on this space
-                    pygame.draw.rect(self.screen, self.WHITE, 
-                        (col_num * self.SQUARE_SIZE, row_num * self.SQUARE_SIZE, self.SQUARE_SIZE, self.SQUARE_SIZE))
-                    continue
-                
-                if combi_point[0]:
-                    #NOTE: Case where there is no ant on this location, and only pheromone
-                    data_value = combi_point[0]
+        if self.REFAC_FLAG:
+            combi = np.stack((pheromone, ant_locs), axis=-1)
+            for row_num, combi_row in enumerate(combi):
+                for col_num, combi_point in enumerate(combi_row):
+                    # I could really use a c code like switch case statement right about now
+                    if np.all(combi_point==0):
+                        #NOTE: Case where there is nothing to draw in this location
+                        continue 
                     
-                    if data_value >= 255:
+                    if combi_point[1]:
+                        #NOTE: Case where there is an ant on this space
+                        pygame.draw.rect(self.screen, self.WHITE, 
+                            (col_num * self.SQUARE_SIZE, row_num * self.SQUARE_SIZE, self.SQUARE_SIZE, self.SQUARE_SIZE))
+                        continue
+                    
+                    if combi_point[0]:
+                        #NOTE: Case where there is no ant on this location, and only pheromone
+                        data_value = combi_point[0]
+                        
+                        if data_value >= 255:
+                            data_value = 255
+                        color = (data_value, 0, 0, data_value)
+                        pygame.draw.rect(self.screen, color, 
+                            (col_num * self.SQUARE_SIZE, row_num * self.SQUARE_SIZE, self.SQUARE_SIZE, self.SQUARE_SIZE))
+        else:
+            for row in range(self.GRID_SIZE):
+                for col in range(self.GRID_SIZE):
+                    if ant_locs[row][col]:
+                        pygame.draw.rect(self.screen, self.WHITE, 
+                            (col * self.SQUARE_SIZE, row * self.SQUARE_SIZE, self.SQUARE_SIZE, self.SQUARE_SIZE))
+                        continue
+                    
+                    data_value = pheromone[row][col]
+                    if data_value == 0:
+                        continue
+                    elif data_value >= 255:
                         data_value = 255
                     color = (data_value, 0, 0, data_value)
                     pygame.draw.rect(self.screen, color, 
-                        (col_num * self.SQUARE_SIZE, row_num * self.SQUARE_SIZE, self.SQUARE_SIZE, self.SQUARE_SIZE))
-                    
+                        (col * self.SQUARE_SIZE, row * self.SQUARE_SIZE, self.SQUARE_SIZE, self.SQUARE_SIZE))
+
         # Update the display
     @timing("sim write")
     def write(self,):
