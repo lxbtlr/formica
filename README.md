@@ -31,14 +31,6 @@ nix-shell default.nix
 
 # Usage
 
-## side-note
-One of my goals for this project was to practice refactoring the code base. This 
-throughout the coding process, but most significantly in the last week on the refactor
-branch. That code has been merged and does run **however**, you will immediately 
-notice there is a problem... THE ANTS ARE ONLY IN ONE QUARTER OF THE SCREEN. The
-earlier MVP is still accessible (look at src/_model.py) and you can see more accurate 
-ants across your screen.
-
 
 There are many arguments that can be passed into the script to modify the output 
 of the code. However, to run the default/unchanged version you only need to run:
@@ -51,6 +43,14 @@ To learn more about the arguments that can be passed into this model, run:
 python model.py -h
 ```
 
+## side-note
+One of my goals for this project was to practice refactoring the code base. This 
+throughout the coding process, but most significantly in the last week on the refactor
+branch. That code has been merged and does run **however**, you will immediately 
+notice there is a problem... THE ANTS ARE ONLY IN ONE QUARTER OF THE SCREEN. The
+earlier MVP is still accessible (look at src/_model.py) and you can see more accurate 
+ants across your screen.
+
 # Interesting Tidbits
 
 One of the major outcomes from the refactor was the change in program architecture from
@@ -58,9 +58,13 @@ one main file to multiple files with distinct roles. Since the main goal of the 
 was to "make the code better", one angle I investigated was runtime. I got the 
 idea that a major time sink might have been the display but I needed to prove it. 
 To that end I created the timing decorator function (see src/helperfunctions.py) to record how long it takes for a given function to
-execute each time it is called.
+execute each time it is called. To make that data more useful I added a few functions 
+to compute useful metrics and boom, you get the [[Example table]] below. This became important 
+as it revealed to me that the refactored version of my display function was 
+actually much slower than my original... so much so that I reverted back to the 
+original draw function. 
 
-
+## Example table
 | function | Mean | Median | Standard Deviation | Variance | Min | Max | Count | Total Time |
 | -------- | ---- | ------ | ------------------ | -------- | --- | --- | ---------- | ---------- |
 | tk init | 1.139548e-05 | 1.096725e-05 | 2.345531e-06 | 5.501515e-12 | 1.430511e-06 | 2.0504e-05 | 103 | 0.001173735 |
