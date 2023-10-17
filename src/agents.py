@@ -41,7 +41,7 @@ class Agent():
         if self.DEBUG: print(f"out:{outcome}")
         self.direction = outcome*45
         
-        x, y = hf.deg2position(self.direction)
+        x, y, _, _ = hf.deg2position(self.direction)
         self.x += x 
         self.y += y 
 
@@ -73,17 +73,17 @@ class Agent():
 
         #NOTE: Case 1: if there is trail straight ahead, follow it 
         print(self.direction, end=" | ")
-        x, y = hf.deg2position(self.direction)
+        x, y, ind_x, ind_y = hf.deg2position(self.direction)
         print(x,y)
- 
+        #FIXME: THIS MAY BE CORRECT BELOW 
         # x, y = DIRECTIONS[(self.direction//45)] 
-        if matrix[x][y] > 0:
+        if matrix[ind_x,ind_y] > 0:
             if self.DEBUG: print("Case 1: forward")
             return (x,y)
         
         #NOTE: Case 2: if there are two or more trails of ~ the same strength, explore
         
-        min_distance = .010
+        min_distance = .020
         
         weighted_matrix = matrix * self.tk.calc(self.direction)
         if self.DEBUG: print(f"weighted_matrix:\n{weighted_matrix}")

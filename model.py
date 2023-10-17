@@ -27,7 +27,7 @@ DEBUG:bool = args.debug
 MAX_FIDELITY:float = 100
 MIN_FIDELITY:float = 95
 MAX_SATURATION:int = 30
-MAX_PHEROMONE_STRENGTH:int = 10
+MAX_PHEROMONE_STRENGTH:int = 20
 
 # How often to Screen shot
 ss_freq:int = args.ssfreq
@@ -138,7 +138,7 @@ if __name__ == "__main__":
             
         
         if ctime %ss_freq == 0: 
-            simulation.save_to_disc(str(int(ctime//ss_freq)))
+            simulation.save_to_disc(int(ctime//ss_freq))
         #print(f"xtmp:{xtmp}\nytmp:{ytmp}") 
         
         pheromone_concentration =  simulation.updatePheromone(pheromone_concentration, xtmp, ytmp)

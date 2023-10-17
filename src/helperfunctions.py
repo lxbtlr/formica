@@ -33,10 +33,10 @@ def timing(identifier):
 def deg2position(degrees):
     if degrees == 360: degrees = 0
     ind = np.where(DIRECTIONS == degrees)
-    x,y = ind
-    print(x,y)
-    dx, dy = displacement[x[0]][y[0]]
-    return dx, dy
+    ind_x,ind_y = ind
+    #print(f"deg2position:{degrees}=",x,y)
+    dx, dy = displacement[ind_x[0]][ind_y[0]]
+    return dx, dy, ind_x,ind_y
 
 @timing("hf r6")
 def round6(value):
