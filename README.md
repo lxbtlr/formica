@@ -1,5 +1,6 @@
-# Scientific Computing Project 1: Formica
-project by Alex Butler
+# Formica
+
+I created an agent based model to replicate the results of Watmough and Edelstein-Keshet's 1993 paper, "Modelling the Formation of Trail Networks by Foraging Ants". This project provided a great entry point into the realm of agent based modeling, and strengthened my confidence in replicating scientific coding works.
 
 ## Install:
 
@@ -59,9 +60,8 @@ python model.py --debug --agents 5
 ### side-note
 One of my goals for this project was to practice refactoring the code base. This heppened
 throughout the coding process, but most significantly in the last week on the refactor
-branch. That code has been merged and does run **however**, you will immediately 
-notice there is a problem... THE ANTS ARE ONLY IN ONE QUARTER OF THE SCREEN. The
-earlier MVP is still accessible (look at src/_model.py) and you can see more accurate 
+branch. That code has been merged and runs. the earlier MVP is still accessible 
+(look at src/_model.py) and you can see more accurate 
 ants across your screen.
 
 # Interesting Tidbits
@@ -75,10 +75,11 @@ To that end I created the timing decorator function (see src/helperfunctions.py)
 execute each time it is called. To make that data more useful I added a few functions 
 to compute useful metrics and boom, you get the table below. This became important 
 as it revealed to me that the refactored version of my display function was 
-actually much slower than my original... so much so that I reverted back to the 
+actually much slower than my original... so much so, that I reverted back to the 
 original drawing mechanism. 
 
 ## Example table
+
 | function | Mean | Median | Standard Deviation | Variance | Min | Max | Count | Total Time |
 | -------- | ---- | ------ | ------------------ | -------- | --- | --- | ---------- | ---------- |
 | tk init | 1.139548e-05 | 1.096725e-05 | 2.345531e-06 | 5.501515e-12 | 1.430511e-06 | 2.0504e-05 | 103 | 0.001173735 |
