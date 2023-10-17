@@ -14,6 +14,7 @@ There are a few dependencies for this project that need to be installed for the 
 - Python 3.10+
 - Python Libraries:
     ```
+    matplotlib
     numpy
     pandas
     pygame
@@ -48,8 +49,15 @@ To learn more about the arguments that can be passed into this model, run:
 python model.py -h
 ```
 
+To see more of the step by step processing that is going on under the hood, pass the debug 
+flag (as shown below) to toggle some print statements. To make the output more understandable I 
+would recommend starting with a low number of ants.
+```
+python model.py --debug --agents 5
+```
+
 ### side-note
-One of my goals for this project was to practice refactoring the code base. This 
+One of my goals for this project was to practice refactoring the code base. This heppened
 throughout the coding process, but most significantly in the last week on the refactor
 branch. That code has been merged and does run **however**, you will immediately 
 notice there is a problem... THE ANTS ARE ONLY IN ONE QUARTER OF THE SCREEN. The
@@ -62,12 +70,13 @@ One of the major outcomes from the refactor was the change in program architectu
 one main file to multiple files with distinct roles. Since the main goal of the refactor 
 was to "make the code better", one angle I investigated was runtime. I got the 
 idea that a major time sink might have been the display but I needed to prove it. 
+
 To that end I created the timing decorator function (see src/helperfunctions.py) to record how long it takes for a given function to
 execute each time it is called. To make that data more useful I added a few functions 
-to compute useful metrics and boom, you get the [[Example table]] below. This became important 
+to compute useful metrics and boom, you get the table below. This became important 
 as it revealed to me that the refactored version of my display function was 
 actually much slower than my original... so much so that I reverted back to the 
-original draw function. 
+original drawing mechanism. 
 
 ## Example table
 | function | Mean | Median | Standard Deviation | Variance | Min | Max | Count | Total Time |
